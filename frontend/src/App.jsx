@@ -106,7 +106,7 @@ export default function App() {
           />
         )}
 
-        <main className="map-pane">
+        <main className="map-pane" style={{ gridColumn: 2 }}>
           <button
             className={`rail-toggle left ${leftOpen ? "" : "collapsed"}`}
             onClick={() => setLeftOpen((o) => !o)}
@@ -131,7 +131,7 @@ export default function App() {
         </main>
 
         {rightOpen && (
-          <aside className="right-rail">
+          <aside className="right-rail" style={{ gridColumn: 3 }}>
             {detail ? (
               <HotspotDetail
                 detail={detail}
