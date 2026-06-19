@@ -74,6 +74,10 @@ export default function MapView({ heatmap, hotspots, selected, onSelect }) {
       controller={true}
       layers={layers}
       getCursor={({ isHovering }) => (isHovering ? "pointer" : "grab")}
+      onClick={(info) => {
+        // Clicking empty map (no bubble picked) clears the selection and reopens the list.
+        if (!info.object) onSelect(null);
+      }}
     >
       <Map mapStyle={MAP_STYLE} reuseMaps />
       {tooltip && (
