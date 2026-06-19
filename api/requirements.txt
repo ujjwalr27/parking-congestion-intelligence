@@ -1,0 +1,8 @@
+# Slim runtime deps for the Vercel serverless function (read-only DuckDB queries).
+# scikit-learn / pyarrow / folium / matplotlib are pipeline/notebook-only and intentionally
+# excluded to stay under Vercel's function bundle size limit. Local dev uses
+# backend/requirements.txt (the full set).
+fastapi==0.115.6
+duckdb==1.1.3
+pandas==2.2.3
+numpy==2.2.1
