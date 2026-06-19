@@ -1,0 +1,26 @@
+[project]
+name = "parking-congestion-backend"
+version = "1.0.0"
+description = "Parking-induced congestion intelligence API (FastAPI + DuckDB)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "pandas==2.2.3",
+    "numpy==2.2.1",
+    "scikit-learn==1.6.1",
+    "duckdb==1.1.3",
+    "pyarrow==18.1.0",
+]
+
+[project.optional-dependencies]
+# Notebook / analysis extras (01_analysis.ipynb). Install with: uv sync --extra notebook
+notebook = [
+    "folium==0.19.4",
+    "matplotlib==3.10.0",
+    "jupyter==1.1.1",
+]
+
+[tool.uv]
+# Virtual project: uv manages the env and dependencies but does not build/install `app` itself.
+package = false
