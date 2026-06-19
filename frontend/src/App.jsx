@@ -27,6 +27,8 @@ export default function App() {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
 
   useEffect(() => {
     getMeta().then(setMeta).catch((e) => setError(String(e)));
@@ -87,15 +89,39 @@ export default function App() {
 
       <KpiHeader stats={stats} />
 
-      <div className="layout">
-        <FilterRail
-          meta={meta}
-          filters={filters}
-          onChange={setFilters}
-          onReset={() => setFilters(DEFAULT_FILTERS)}
-        />
+      <div
+        className="layout"
+        style={{
+          gridTemplateColumns: `${leftOpen ? "288px" : "0"} 1fr ${
+            rightOpen ? "372px" : "0"
+          }`,
+        }}
+      >
+        {leftOpen && (
+          <FilterRail
+            meta={meta}
+            filters={filters}
+            onChange={setFilters}
+            onReset={() => setFilters(DEFAULT_FILTERS)}
+          />
+        )}
 
         <main className="map-pane">
+          <button
+            className={`rail-toggle left ${leftOpen ? "" : "collapsed"}`}
+            onClick={() => setLeftOpen((o) => !o)}
+            title={leftOpen ? "Hide filters" : "Show filters"}
+          >
+            {leftOpen ? "‹" : "›"}
+          </button>
+          <button
+            className={`rail-toggle right ${rightOpen ? "" : "collapsed"}`}
+            onClick={() => setRightOpen((o) => !o)}
+            title={rightOpen ? "Hide hotspots" : "Show hotspots"}
+          >
+            {rightOpen ? "›" : "‹"}
+          </button>
+
           <MapView
             heatmap={heatmap}
             hotspots={hotspots}
@@ -104,21 +130,23 @@ export default function App() {
           />
         </main>
 
-        <aside className="right-rail">
-          {detail ? (
-            <HotspotDetail
-              detail={detail}
-              hotspot={hotspots.find((h) => h.cluster_id === selected)}
-              onClose={() => setSelected(null)}
-            />
-          ) : (
-            <HotspotTable
-              hotspots={hotspots}
-              onSelect={setSelected}
-              weights={meta?.score_weights}
-            />
-          )}
-        </aside>
+        {rightOpen && (
+          <aside className="right-rail">
+            {detail ? (
+              <HotspotDetail
+                detail={detail}
+                hotspot={hotspots.find((h) => h.cluster_id === selected)}
+                onClose={() => setSelected(null)}
+              />
+            ) : (
+              <HotspotTable
+                hotspots={hotspots}
+                onSelect={setSelected}
+                weights={meta?.score_weights}
+              />
+            )}
+          </aside>
+        )}
       </div>
     </div>
   );
