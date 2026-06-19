@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+dist/
+
+# Raw CSV is 104 MB (over GitHub's 100 MB limit) — never commit it.
+data/raw/*.csv
+
+# The processed parquet (~11 MB) IS committed so it ships with the Vercel deploy.
+# (To regenerate locally: cd backend && uv run python -m app.pipeline)
+!data/processed/violations.parquet
+
+# OS
+.DS_Store
+Thumbs.db
