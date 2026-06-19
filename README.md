@@ -1,122 +1,170 @@
-# Parking-Induced Congestion Intelligence — Bengaluru
+# Parking Congestion Intelligence — Bengaluru
 
-AI-driven parking intelligence that detects **illegal-parking hotspots** and quantifies their
-**impact on traffic flow** (a proxy model built from the violation data) to enable **targeted,
-prioritized enforcement** — replacing reactive, patrol-based enforcement with a ranked heatmap.
+An analytics dashboard that turns raw parking-violation records into a **ranked, map-based
+enforcement plan**. It detects illegal-parking **hotspots**, scores each one by its likely
+**impact on traffic flow**, and lets officers filter and drill into the worst locations —
+replacing reactive, patrol-based enforcement with data-driven prioritization.
 
-Built on the HackerEarth PS-1 dataset only (no external data). ~298k Bengaluru Traffic Police
-parking-violation records (Nov 2023 – Apr 2024).
+Built for HackerEarth Problem Statement 1 using ~298,000 Bengaluru Traffic Police parking
+violations (Nov 2023 – Apr 2024).
 
-## What it does
+---
 
-- **Hotspot detection** — DBSCAN clusters violation coordinates into stable hotspots.
-- **Congestion-Impact Score (0–100)** — a proxy for traffic-flow impact, blended from volume,
-  recurrence, violation severity, vehicle footprint, junction proximity, and peak-hour share
-  (weights in `backend/app/scoring.py`).
-- **Interactive dashboard** — heatmap + hotspot bubbles, live filters (date, hour, vehicle,
-  violation, station, status, junction), ranked enforcement-priority table, per-hotspot detail
-  (score breakdown, hour/day profile, violation & vehicle mix, top locations), and KPI cards.
+## The problem
+
+On-street illegal parking near commercial areas, metro stations, and markets chokes
+carriageways and intersections. Today, enforcement is reactive and there is **no map of where
+violations actually hurt traffic the most**, so it's hard to decide where to send officers.
+
+**This project answers:** *Where are the illegal-parking hotspots, and which ones should be
+enforced first?*
+
+---
+
+## Key features
+
+- **Hotspot detection** — clusters hundreds of thousands of violation points into discrete
+  hotspots using DBSCAN (density-based spatial clustering).
+- **Congestion-Impact Score (0–100)** — ranks each hotspot by how much it likely disrupts
+  traffic, combining volume, recurrence, violation severity, vehicle size, junction proximity,
+  and peak-hour concentration.
+- **Interactive map** — a heatmap plus score-colored hotspot bubbles over an OpenStreetMap base.
+- **Live filters** — by date, hour of day, vehicle type, violation type, police station,
+  validation status, and junction/off-junction.
+- **Enforcement priority list** — hotspots ranked by score; click any one to inspect it.
+- **Hotspot detail** — score breakdown, hour-of-day and day-of-week patterns, violation mix,
+  vehicle mix, and the worst-offending addresses.
+- **KPI summary** — total violations, active hotspots, share at junctions, peak hour, and the
+  busiest station — all responsive to the active filters.
+
+---
+
+## How the Congestion-Impact Score works
+
+The dataset records *violations only* — there is no live traffic-speed feed — so traffic-flow
+impact is an **explainable proxy** built entirely from the data. For each hotspot, six signals
+are normalized and blended into a 0–100 score:
+
+| Signal | Weight | Rationale |
+|---|---|---|
+| **Volume** | 30% | More violations = more obstruction |
+| **Severity** | 25% | Blocking a main road or junction hurts flow more than a quiet no-parking bay |
+| **Recurrence** | 15% | Chronic, repeat-offender locations matter more than one-offs |
+| **Junction proximity** | 12% | Violations at intersections sit on flow-critical nodes |
+| **Vehicle footprint** | 10% | A bus or truck blocks far more carriageway than a scooter |
+| **Peak-hour share** | 8% | Violations during rush hours amplify congestion |
+
+All weights live in a single module ([`backend/app/scoring.py`](backend/app/scoring.py)), so
+they are transparent and easy to tune. The model is designed so a real congestion feed could
+later replace the proxy signals without changing the rest of the system.
+
+> **Note on timestamps:** the data is anonymized; its hour-of-day distribution does not follow a
+> realistic enforcement day under any timezone, so the hour/peak views are *indicative*. Peak
+> hour is only 8% of the score and has no effect on the spatial ranking.
+
+---
 
 ## Architecture
 
 ```
-data/raw/violations.csv         provided dataset (renamed)
-data/processed/violations.parquet   built by the pipeline
-backend/app/   pipeline.py · scoring.py · clustering.py · db.py (DuckDB) · routes.py · main.py
-frontend/      Vite + React + MapLibre/deck.gl + Recharts
-notebooks/01_analysis.ipynb     EDA + methodology + clustering validation
+React + MapLibre/deck.gl  ──HTTP──►  FastAPI  ──►  DuckDB  ──►  violations.parquet
+      (dashboard)                   (REST API)   (in-process,    (pre-processed data,
+                                                  millisecond       built once from CSV)
+                                                  aggregations)
 ```
 
-The backend preprocesses the CSV into parquet once, then serves **aggregated** endpoints
-(DuckDB group-bys) — raw rows never reach the browser.
+The backend pre-processes the raw CSV into a compact Parquet file **once**, then serves only
+**aggregated** results (hotspots, heatmap bins, KPIs) — raw rows never reach the browser, so
+the dashboard stays fast even over ~298k records.
 
-## Run
+```
+.
+├── data/
+│   ├── raw/            # source CSV (not committed — too large)
+│   └── processed/      # violations.parquet (generated by the pipeline)
+├── backend/
+│   └── app/
+│       ├── pipeline.py     # CSV → features → clusters → parquet
+│       ├── scoring.py      # weights + Congestion-Impact Score
+│       ├── clustering.py   # DBSCAN hotspot detection
+│       ├── db.py           # DuckDB query layer
+│       ├── routes.py       # API endpoints
+│       └── main.py         # FastAPI app
+├── frontend/           # React + Vite dashboard
+└── notebooks/
+    └── 01_analysis.ipynb   # EDA + methodology + clustering validation
+```
 
-**1. Backend** (with [uv](https://docs.astral.sh/uv/) — recommended)
+---
+
+## Tech stack
+
+**Backend:** Python, FastAPI, DuckDB, pandas, scikit-learn (DBSCAN)
+**Frontend:** React, Vite, MapLibre GL + deck.gl (map/heatmap), Recharts (charts)
+**Data:** ~298k rows pre-processed into an 11 MB Parquet file
+
+---
+
+## Getting started
+
+### 1. Backend
+
+Requires Python 3.11+. Using [uv](https://docs.astral.sh/uv/) (recommended):
+
 ```bash
 cd backend
-uv sync                               # creates .venv and installs deps from pyproject.toml
-# uv sync --extra notebook            # also install folium/matplotlib/jupyter for the notebook
-uv run python -m app.pipeline         # builds data/processed/violations.parquet (run once)
-uv run uvicorn app.main:app --reload  # API on http://127.0.0.1:8000  (docs at /docs)
+uv sync                                # create venv + install dependencies
+uv run python -m app.pipeline          # build data/processed/violations.parquet (run once)
+uv run uvicorn app.main:app --reload   # API → http://127.0.0.1:8000  (docs at /docs)
 ```
 
-<details><summary>Without uv (plain pip + venv)</summary>
+<details>
+<summary>Using plain pip instead</summary>
 
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\Activate.ps1            # Windows PowerShell  (bash: source .venv/bin/activate)
+.venv\Scripts\Activate.ps1             # Windows  (bash: source .venv/bin/activate)
 pip install -r requirements.txt
 python -m app.pipeline
 uvicorn app.main:app --reload
 ```
 </details>
 
-**2. Frontend**
+> The pipeline reads `data/raw/violations.csv`. Place the dataset there before running it.
+
+### 2. Frontend
+
+Requires Node 18+.
+
 ```bash
 cd frontend
 npm install
-npm run dev                           # dashboard on http://localhost:5173 (proxies /api -> :8000)
+npm run dev                            # dashboard → http://localhost:5173
 ```
 
-**3. Notebook (optional)**
+The dev server proxies API calls to the backend on port 8000 automatically.
+
+### 3. Analysis notebook (optional)
+
 ```bash
-cd backend && uv sync --extra notebook        # or: pip install -r requirements.txt
+cd backend && uv sync --extra notebook
 uv run jupyter lab ../notebooks/01_analysis.ipynb
 ```
 
-## Deploy (Vercel — single URL, serverless)
+---
 
-The whole app deploys to Vercel: the React frontend as a static build and the FastAPI backend
-as a Python serverless function under `/api`. The ~11 MB `violations.parquet` is committed and
-bundled with the function (the 104 MB CSV is **not** committed — it exceeds GitHub's limit and
-isn't needed once the parquet exists).
+## API reference
 
-Files involved: [`vercel.json`](vercel.json) (frontend build + `/api/*` rewrite +
-`includeFiles` for the parquet), [`api/index.py`](api/index.py) (re-exports the FastAPI app),
-[`api/requirements.txt`](api/requirements.txt) (slim runtime deps).
-
-```bash
-# 1. Ensure the parquet exists and is committed
-cd backend && uv run python -m app.pipeline   # writes data/processed/violations.parquet
-git add data/processed/violations.parquet vercel.json api/ && git commit -m "Add Vercel deploy"
-git push
-
-# 2. Import the repo at vercel.com/new  (Vercel reads vercel.json — no manual settings needed)
-```
-
-No `VITE_API_URL` is needed — frontend and API share the origin, so the default `/api` resolves
-to the function. (Set `VITE_API_URL` only if you host the backend elsewhere, e.g. Render.)
-
-**Caveat:** serverless functions cold-start (~2–4 s after idle); the first dashboard load fires
-four parallel calls so they warm together. Subsequent calls are fast.
-
-> Local dev is unchanged by any of this — `uv run uvicorn app.main:app` and `npm run dev` work
-> exactly as before; the Vercel files are an additive deployment layer.
-
-## API
+All endpoints return small, aggregated JSON and accept the same filters.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/meta` | filter vocabulary + score weights |
-| `GET /api/hotspots` | ranked clusters with impact score + component breakdown |
-| `GET /api/heatmap` | binned points for the heat layer |
-| `GET /api/hotspot/{id}` | per-hotspot detail |
-| `GET /api/stats` | KPIs, station leaderboard, time series |
+| `GET /api/meta` | Filter options (vehicles, violations, stations, dates) + score weights |
+| `GET /api/hotspots` | Ranked hotspots with impact score and component breakdown |
+| `GET /api/heatmap` | Binned points for the heat layer |
+| `GET /api/hotspot/{id}` | Full detail for one hotspot |
+| `GET /api/stats` | KPIs, station leaderboard, and time series |
 
-All accept the same filters: `date_from`, `date_to`, `hours`, `vehicle_types`,
-`violation_types`, `stations`, `statuses` (default `approved`), `at_junction`.
-
-## Methodology note
-
-The dataset records violations only — there is no speed/flow feed — so "impact on traffic
-flow" is an **explainable proxy**, not a measurement. The scoring is transparent and tunable in
-one module (`scoring.py`); the dashboard's "How the score works" panel surfaces the weights.
-The model is designed so a real congestion feed could later replace the proxy components.
-
-**Timestamp caveat:** `created_datetime` carries a `+00` (UTC) offset and is converted to IST
-(+5:30) for display. The data is anonymized and its hour distribution does not follow a
-realistic enforcement day under any timezone, so the **hour-of-day / peak-hour views are
-indicative only**. Peak-hour share is a small component (8%) of the score and does not affect
-the spatial hotspot ranking.
+**Filters:** `date_from`, `date_to`, `hours`, `vehicle_types`, `violation_types`, `stations`,
+`statuses` (default `approved`), `at_junction`.
